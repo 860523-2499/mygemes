@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>贪吃蛇游戏 - 豪华终极版</title>
+    <style>
+        body {
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        /* 游戏区域容器 */
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+        }
+        canvas {
+            border: 4px solid #fff;
+            background: #111;
+            box-shadow: 0 0 25px rgba(76, 175, 80, 0.3);
+            border-radius: 4px;
+        }
+        /* 开始游戏和重新开始的按钮界面 */
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 400px;
+            height: 400px;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+            border-radius: 4px;
+        }
+        h1 {
+            margin: 0 0 15px 0;
+            font-size: 32px;
+            text-shadow: 2px 2px #000;
+            color: #4CAF50;
+        }
+        /* 名字输入框样式 */
+        #name-input-container {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        label {
+            font-size: 14px;
+            color: #ccc;
+            margin-bottom: 5px;
+        }
+        input[type="text"] {
+            padding: 8px 12px;
+            font-size: 16px;
+            border: 2px solid #4CAF50;
+            border-radius: 4px;
+            background: #222;
+            color: white;
+            text-align: center;
+            outline: none;
+            width: 180px;
+        }
+        #score-display {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #ffeb3b;
+            text-align: center;
+            line-height: 1.5;
+        }
+        button {
+            padding: 12px 30px;
+            font-size: 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px #2E7D32;
+            transition: 0.1s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:active {
+            box-shadow: 0 0 #2E7D32;
+            transform: translateY(4px);
+        }
+        /* 顶部实时分数条 */
+        #live-score-bar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 5;
+            text-shadow: 1px 1px 2px #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- 实时分数显示 -->
+        <div id="live-score-bar" style="display:none;">得分: <span id="live-score">0</span></div>
+        <canvas id="gc" width="400" height="400"></canvas>
+        
+        <!-- 菜单界面 -->
+        <div id="menu">
+            <h1 id="title">贪吃蛇游戏</h1>
+            <!-- 名字输入区域（游戏开始前显示） -->
+            <div id="name-input-container">
+                <label for="player-name">请输入你的玩家名称：</label>
+                <input type="text" id="player-name" value="玩家1" maxlength="10">
+            </div>
+            <!-- 分数显示区域（游戏结束后显示） -->
+            <div id="score-display" style="display:none;">
+                <div id="egg-victory" style="color: #ffeb3b; font-weight: bold; margin-bottom: 10px; display: none;">🏆 恭喜通关天才模式！</div>
+                玩家: <span id="display-name" style="color:#00ffff;"></span><br>
+                最终得分: <span id="final-score">0</span>
+            </div>
+            <button id="start-btn" onclick="startGame()">开始游戏</button>
+        </div>
+    </div>
+
+<script>
+    var canv, ctx;
+    var px, py, gs, tc, ax, ay, xv, yv, trail, tail;
+    var gameInterval;
+    var isPlaying = false;
+    var score = 0;
+    var playerName = "";
+    var isEggActive = false; // 标记彩蛋是否触发
+
+    window.onload = function() {
+        canv = document.getElementById("gc");
+        ctx = canv.getContext("2d");
+        document.addEventListener("keydown", keyPush);
+        // 初始化黑背景
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canv.width, canv.height);
+    }
+
+    // 点击开始游戏按钮触发
+    function startGame() {
+        var inputName = document.getElementById("player-name").value.trim();
+        playerName = inputName ? inputName : "无名侠";
+
+        // 彩蛋核心判断
+        if (playerName === "我是天才") {
+            isEggActive = true;
+        } else {
+            isEggActive = false;
+        }
+
+        // 隐藏菜单及清空上次的通关文案
+        document.getElementById("menu").style.display = "none";
+        document.getElementById("egg-victory").style.display = "none";
+        document.getElementById("live-score").innerText = "0";
+        document.getElementById("live-score-bar").style.display = "block";
+
+        // 重置游戏所有初始参数
+        px = py = 10;
+        gs = tc = 20;
+        ax = ay = 15;
+        xv = yv = 0; // 最开始静止不动
+        trail = [];
+        tail = 5;
+        score = 0;
+        isPlaying = true;
+
+        // 启动新游戏循环 (10 FPS)
+        clearInterval(gameInterval);
+        gameInterval = setInterval(game, 1000 / 10);
+    }
+
+    function game() {
+        if (xv !== 0 || yv !== 0) {
+            px += xv;
+            py += yv;
+        }
+
+        // 穿墙检测
+        if (px < 0) px = tc - 1;
+        if (px > tc - 1) px = 0;
+        if (py < 0) py = tc - 1;
+        if (py > tc - 1) py = 0;
+
+        // 擦除画布
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canv.width, canv.height);
+
+        // 【彩蛋绘制逻辑】：如果彩蛋触发，全屏幕铺满红色的果实
+        if (isEggActive) {
+            ctx.fillStyle = "red";
+            for (var r = 0; r < tc; r++) {
+                for (var c = 0; c < tc; c++) {
+                    // 跳过蛇头当前所在的位置
+                    if (c === px && r === py) continue;
+                    ctx.fillRect(c * gs, r * gs, gs - 2, gs - 2);
+                }
+            }
+        }
+
+        // 绘制蛇身与碰撞检测
+        for (var i = 0; i < trail.length; i++) {
+            // 彩蛋模式下，将蛇头（数组最后一项）涂成金色方便辨认，身体涂成亮绿色
+            if (isEggActive && i === trail.length - 1) {
+                ctx.fillStyle = "gold"; 
+            } else {
+                ctx.fillStyle = "lime";
+            }
+            
+            ctx.fillRect(trail[i].x * gs, trail[i].y * gs, gs - 2, gs - 2);
+
+            // 撞到自己检测：
+            // 普通模式下移动即生效；彩蛋模式下因为一出生就被包裹在初始静态蛇身(tail=5)中，
+            // 必须等真正移动且得分超过初始身体（即开始变长后），才触发正常的撞体机制。
+            if ((xv !== 0 || yv !== 0) && trail[i].x == px && trail[i].y == py) {
+                if (!isEggActive || (isEggActive && score > 0)) {
+                    gameOver(false);
+                    return;
+                }
+            }
+        }
+
+        // 移动蛇的坐标记录
+        if (xv !== 0 || yv !== 0) {
+            trail.push({x: px, y: py});
+            while (trail.length > tail) {
+                trail.shift();
+            }
+        } else {
+            // 静止状态下的初始蛇身渲染
+            ctx.fillStyle = "lime";
+            for(var i=0; i<tail; i++) {
+                // 如果是第一个（蛇头位置），彩蛋模式给个特殊颜色
+                if(isEggActive && i === 0) ctx.fillStyle = "gold";
+                else ctx.fillStyle = "lime";
+                ctx.fillRect((px-i) * gs, py * gs, gs - 2, gs - 2);
+            }
+        }
+
+        // 吃食物检测
+        if (isEggActive) {
+            // 【彩蛋吃食物】：因为全屏都是食物，只要蛇移动，每走一步都算吃到食物！
+            if (xv !== 0 || yv !== 0) {
+                tail++;
+                score++;
+                document.getElementById("live-score").innerText = score;
+
+                // 终极胜利判定：当全屏除了蛇头以外全部吃满（总格数400 - 蛇头1 = 395分）
+                if (score >= (tc * tc - 5)) {
+                    gameOver(true);
+                    return;
+                }
+            }
+        } else {
+            // 普通模式：只有走到唯一的红点坐标才算吃到食物
+            if (ax == px && ay == py) {
+                tail++;
+                score++;
+                document.getElementById("live-score").innerText = score;
+                ax = Math.floor(Math.random() * tc);
+                ay = Math.floor(Math.random() * tc);
+            }
+            // 普通模式下绘制单个红色食物
+            ctx.fillStyle = "red";
+            ctx.fillRect(ax * gs, ay * gs, gs - 2, gs - 2);
+        }
+    }
+
+    // 游戏结束结算
+    function gameOver(isVictory) {
+        clearInterval(gameInterval);
+        isPlaying = false;
+        document.getElementById("live-score-bar").style.display = "none";
+
+        // 切换菜单显示内容
+        if (isVictory) {
+            document.getElementById("title").innerText = "完美通关！";
+            document.getElementById("title").style.color = "#ffeb3b";
+            document.getElementById("egg-victory").style.display = "block";
+        } else {
+            document.getElementById("title").innerText = "游戏结束";
+            document.getElementById("title").style.color = "#ff3333";
+        }
+
+        // 显示名字和分数
+        document.getElementById("display-name").innerText = playerName;
+        document.getElementById("final-score").innerText = score;
+        
+        document.getElementById("name-input-container").style.display = "none"; // 隐藏输入框
+        document.getElementById("score-display").style.display = "block"; // 显示战绩
+        document.getElementById("start-btn").innerText = "再来一局";
+        document.getElementById("menu").style.display = "flex";
+    }
+
+    // 监听键盘按键
+    function keyPush(evt) {
+        if (!isPlaying) return;
+        switch(evt.keyCode) {
+            case 37: if(xv != 1)  { xv = -1; yv = 0;  } break; // 左
+            case 38: if(yv != 1)  { xv = 0;  yv = -1; } break; // 上
+            case 39: if(xv != -1) { xv = 1;  yv = 0;  } break; // 右
+            case 40: if(yv != -1) { xv = 0;  yv = 1;  } break; // 下
+        }
+    }
+</script>
+</body>
+</html>
